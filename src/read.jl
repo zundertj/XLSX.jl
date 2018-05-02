@@ -6,6 +6,23 @@ Creates an empty instance of XLSXFile.
 """
 XLSXFile(filepath::AbstractString) = XLSXFile(filepath, Dict{String, EzXML.Document}(), EmptyWorkbook(), Vector{Relationship}())
 
+function readxmldata!(xf, filename)
+    xlfile = ZipFile.Reader(xf.filepath)
+    for f in xlfile.files
+        if f.name == filename
+            println("will read $filename")
+            doc = EzXML.readxml(f)
+            xf.data[f.name] = doc
+            println("done reading $filename")
+
+            break
+        end
+    end
+
+    close(xlfile)
+    nothing
+end
+
 """
     read(filepath) :: XLSXFile
 
@@ -17,7 +34,7 @@ function read(filepath::AbstractString) :: XLSXFile
 
     xlfile = ZipFile.Reader(filepath)
     try
-        for f in xlfile.files
+        @sync for f in xlfile.files
 
             # parse only XML files
             if !ismatch(r".xml", f.name) && !ismatch(r".rels", f.name)
@@ -25,8 +42,7 @@ function read(filepath::AbstractString) :: XLSXFile
                 continue
             end
 
-            doc = EzXML.readxml(f)
-            xf.data[f.name] = doc
+            @async readxmldata!(xf, f.name)
         end
 
         # Check for minimum package requirements
